@@ -6,7 +6,7 @@ from pathlib import Path
 
 # ==================== CONFIGURAÇÃO INICIAL ====================
 st.set_page_config(
-    page_title="Dashboard Sell-in/Sell-out - Farmácias - BioWell",
+    page_title="Dashboard Sell-in/Sell-out - Grupos - BioWell",
     page_icon="💊",
     layout="wide"
 )
@@ -95,7 +95,7 @@ def load_data():
 # ==================== APLICAÇÃO PRINCIPAL ====================
 def main():
     # Título
-    st.title("💊 Dashboard Sell-in/Sell-out - Farmácias - BioWell")
+    st.title("💊 Dashboard Sell-in/Sell-out - Grupos - BioWell")
 
     # Carregar dados
     df = load_data()
@@ -167,7 +167,7 @@ def main():
 
     # ==================== ABA 1: ACOMPANHAMENTO DE ESTOQUE ====================
     with tab1:
-        st.header("Detalhes por Farmácia e Produto")
+        st.header("Detalhes por Grupo e Produto")
 
         # Gráfico de Estoque
         if farmacia_selecionada == 'All' and produto_selecionado == 'All':
@@ -240,7 +240,7 @@ def main():
 
         st.sidebar.info(f"""
         **Dados filtrados:**
-        - Farmácias: {df_filtered['Grupo'].nunique()}
+        - Grupos: {df_filtered['Grupo'].nunique()}
         - Produtos: {df_filtered['Descrição'].nunique()}
         - Total registros: {len(df_filtered)}
         - Período: {df_filtered['Mês/Ano'].min()} a {df_filtered['Mês/Ano'].max()}
