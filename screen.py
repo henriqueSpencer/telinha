@@ -37,22 +37,27 @@ def load_data():
             df = pickle.load(uploaded)
 
         # Conversão da data
-        df['mes_ano_dt'] = pd.to_datetime(df['mes_ano'], format='%m-%Y')
+        df['mes_ano_dt'] = pd.to_datetime(df['mes_ano'], format='%m-%Y').dt.date
 
         # Colunas acumulativas
-        df = df.sort_values(['produto_codigo', 'mes_ano_dt'])
-        df['estoque_acumulado_produto'] = df.groupby('produto_codigo')['diferenca'].cumsum()
+        df = df.sort_values(['produto_descricao', 'mes_ano_dt'])
+        df['estoque_acumulado_produto'] = df.groupby('produto_descricao')['diferenca'].cumsum()
 
-        df = df.sort_values(['cnpj_matriz', 'mes_ano_dt'])
-        df['estoque_acumulado_cliente'] = df.groupby('cnpj_matriz')['diferenca'].cumsum()
+        df = df.sort_values(['cliente_nome', 'mes_ano_dt'])
+        df['estoque_acumulado_cliente'] = df.groupby('cliente_nome')['diferenca'].cumsum()
 
-        df = df.sort_values(['produto_codigo', 'cnpj_matriz', 'mes_ano_dt'])
-        df['estoque_acumulado_produto_cliente'] = df.groupby(['produto_codigo', 'cnpj_matriz'])[
+        df = df.sort_values(['cliente_nome', 'mes_ano_dt'])
+        df['sellin_acumulado_cliente'] = df.groupby('cliente_nome')['qtd_vendida_para_farmacia'].cumsum()
+
+        df = df.sort_values(['cliente_nome', 'mes_ano_dt'])
+        df['sellout_acumulado_cliente'] = df.groupby('cliente_nome')['qtd_vendida_para_cliente'].cumsum()
+
+        df = df.sort_values(['produto_descricao', 'cliente_nome', 'mes_ano_dt'])
+        df['estoque_acumulado_produto_cliente'] = df.groupby(['produto_descricao', 'cliente_nome'])[
             'diferenca'].cumsum()
 
         # Retornar apenas as colunas necessárias já renomeadas
         df_final = df[[
-            'mes_ano',
             'cliente_nome',
             'cnpj_matriz',
             'produto_codigo',
@@ -63,12 +68,13 @@ def load_data():
             'estoque_acumulado_produto',
             'estoque_acumulado_cliente',
             'estoque_acumulado_produto_cliente',
+            'sellin_acumulado_cliente',
+            'sellout_acumulado_cliente',
             'mes_ano_dt'  # Manter para filtro de data
         ]].copy()
 
         # Renomear colunas
         df_final.columns = [
-            'Mês/Ano',
             'Grupo',
             'CNPJ',
             'Produto',
@@ -79,6 +85,8 @@ def load_data():
             'Estoque Total por Produto',
             'Estoque por Grupo',
             'Estoque por Produto e Grupo',
+            'Sell-in por Grupo',
+            'Sell-out por Grupo',
             'mes_ano_dt'
         ]
 
@@ -109,14 +117,15 @@ def main():
 
     # Filtro de Data
     if 'mes_ano_dt' in df.columns:
-        min_date = df['mes_ano_dt'].min().date()
-        max_date = df['mes_ano_dt'].max().date()
+        min_date = df['mes_ano_dt'].min()
+        max_date = df['mes_ano_dt'].max()
 
         date_range = st.sidebar.date_input(
             "Período:",
             value=(min_date, max_date),
             min_value=min_date,
-            max_value=max_date
+            max_value=max_date,
+            format="DD-MM-YYYY"
         )
 
         # Garantir que sempre temos dois valores (início e fim)
@@ -154,8 +163,8 @@ def main():
     # Aplicar filtro de data
     if 'mes_ano_dt' in df_filtered.columns:
         df_filtered = df_filtered[
-            (df_filtered['mes_ano_dt'].dt.date >= start_date) &
-            (df_filtered['mes_ano_dt'].dt.date <= end_date)
+            (df_filtered['mes_ano_dt'] >= start_date) &
+            (df_filtered['mes_ano_dt'] <= end_date)
             ]
 
     if df_filtered.empty:
@@ -176,51 +185,139 @@ def main():
             # Ordenar dados para o gráfico
             df_grafico = df_filtered.sort_values(['mes_ano_dt'])
 
-            if produto_selecionado != 'All' and farmacia_selecionada == 'All':
-                # Mostrar Estoque Total por Produto
-                fig = px.line(
-                    df_grafico,
-                    x='mes_ano_dt',
-                    y='Estoque Total por Produto',
-                    title=f'Estoque Total - {produto_selecionado}',
-                    markers=True
-                )
-                fig.update_layout(
-                    xaxis_title='Período',
-                    yaxis_title='Estoque Acumulado',
-                    height=400
-                )
-                st.plotly_chart(fig, width='stretch')
+            # if produto_selecionado != 'All' and farmacia_selecionada == 'All':
+            #     # Mostrar Estoque Total por Produto
+            #     fig = px.line(
+            #         df_grafico,
+            #         x='mes_ano_dt',
+            #         y='Estoque Total por Produto',
+            #         title=f'Estoque Total - {produto_selecionado}',
+            #         markers=True
+            #     )
+            #     fig.update_layout(
+            #         xaxis_title='Período',
+            #         yaxis_title='Estoque Acumulado',
+            #         height=400
+            #     )
+            #     st.plotly_chart(fig, width='stretch')
 
-            elif produto_selecionado == 'All' and farmacia_selecionada != 'All':
+            if produto_selecionado == 'All' and farmacia_selecionada != 'All':
                 fig = px.line(
                     df_grafico,
                     x='mes_ano_dt',
                     y='Estoque por Grupo',
-                    title=f'Estoque por Grupo - {farmacia_selecionada}',
+                    title=f'Estoque, Sell-in e Sell-out por Grupo - {farmacia_selecionada}',
                     markers=True
                 )
+                # Adicionar linha de Sell-in (verde)
+                fig.add_trace(px.line(
+                    df_grafico,
+                    x='mes_ano_dt',
+                    y='Sell-in por Grupo',
+                    markers=True,
+                    color_discrete_sequence=['green']
+                ).data[0].update(name='Sell-in'))
+                
+                # Adicionar linha de Sell-out (vermelho)
+                fig.add_trace(px.line(
+                    df_grafico,
+                    x='mes_ano_dt',
+                    y='Sell-out por Grupo',
+                    markers=True,
+                    color_discrete_sequence=['red']
+                ).data[0].update(name='Sell-out'))
+                
+                # Atualizar o nome da linha de estoque
+                fig.data[0].name = 'Estoque por Grupo'
+                
+                # Configurar hover personalizado para cada linha
+                fig.data[0].hovertemplate = '<b>Estoque por Grupo</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
+                fig.data[1].hovertemplate = '<b>Sell-in por Grupo</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
+                fig.data[2].hovertemplate = '<b>Sell-out por Grupo</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
                 fig.update_layout(
                     xaxis_title='Período',
-                    yaxis_title='Estoque Acumulado',
-                    height=400
+                    yaxis_title='Quantidade',
+                    height=400,
+                    legend=dict(
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="left",
+                        x=0.01
+                    ),
+                    hovermode='x unified'  # Mostra todos os valores no mesmo ponto
                 )
                 st.plotly_chart(fig, width='stretch')
 
-
             elif produto_selecionado != 'All' and farmacia_selecionada != 'All':
-                # Mostrar Estoque por Farmácia específica
+                # Mostrar Estoque por Farmácia específica com Sell-in e Sell-out
                 fig = px.line(
                     df_grafico,
                     x='mes_ano_dt',
                     y='Estoque por Produto e Grupo',
-                    title=f'Estoque - {produto_selecionado} - {farmacia_selecionada}',
+                    title=f'Estoque, Sell-in e Sell-out - {produto_selecionado} - {farmacia_selecionada}',
                     markers=True
                 )
+                
+                # Adicionar linha de Sell-in (verde)
+                fig.add_trace(px.line(
+                    df_grafico,
+                    x='mes_ano_dt',
+                    y='Sell-in',
+                    markers=True,
+                    color_discrete_sequence=['green']
+                ).data[0].update(name='Sell-in'))
+                
+                # Adicionar linha de Sell-out (vermelho)
+                fig.add_trace(px.line(
+                    df_grafico,
+                    x='mes_ano_dt',
+                    y='Sell-out',
+                    markers=True,
+                    color_discrete_sequence=['red']
+                ).data[0].update(name='Sell-out'))
+                
+                # Atualizar o nome da linha de estoque
+                fig.data[0].name = 'Estoque por Produto e Grupo'
+                
+                # Configurar hover personalizado para cada linha
+                fig.data[0].hovertemplate = '<b>Estoque por Produto e Grupo</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
+                fig.data[1].hovertemplate = '<b>Sell-in</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
+                fig.data[2].hovertemplate = '<b>Sell-out</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
                 fig.update_layout(
                     xaxis_title='Período',
-                    yaxis_title='Estoque Acumulado',
-                    height=400
+                    yaxis_title='Quantidade',
+                    height=400,
+                    legend=dict(
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="left",
+                        x=0.01
+                    ),
+                    hovermode='x unified'  # Mostra todos os valores no mesmo ponto
                 )
                 st.plotly_chart(fig, width='stretch')
 
@@ -229,9 +326,15 @@ def main():
 
         # Exibir tabela (com as 5 colunas principais)
         st.dataframe(
-            df_tabela[['Mês/Ano', 'Grupo', 'Descrição', 'Sell-in', 'Sell-out', 'Diferença']],
+            df_tabela[['mes_ano_dt', 'Grupo', 'Descrição', 'Sell-in', 'Sell-out', 'Diferença']],
             width='stretch',
-            height=600
+            height=600, 
+            column_config={
+                "mes_ano_dt": st.column_config.DateColumn(
+                    "Mês/Ano",
+                    format="MM-YYYY" 
+                )
+            }
         )
 
         # Informações na sidebar
@@ -243,7 +346,7 @@ def main():
         - Grupos: {df_filtered['Grupo'].nunique()}
         - Produtos: {df_filtered['Descrição'].nunique()}
         - Total registros: {len(df_filtered)}
-        - Período: {df_filtered['Mês/Ano'].min()} a {df_filtered['Mês/Ano'].max()}
+        - Período: {df_filtered['mes_ano_dt'].min().strftime('%d-%m-%Y')} a {df_filtered['mes_ano_dt'].max().strftime('%d-%m-%Y')}
         """)
 
     # ==================== ABA 2: GIRO DE ESTOQUE (VAZIA) ====================
