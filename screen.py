@@ -188,6 +188,7 @@ def main():
 
         # Gráfico de Estoque
         if farmacia_selecionada == 'All' and produto_selecionado == 'All':
+            df_grafico = df_filtered.sort_values(['mes_ano_dt'])
             fig = px.line(
                     df_grafico,
                     x='mes_ano_dt',
