@@ -188,64 +188,7 @@ def main():
 
         # Gráfico de Estoque
         if farmacia_selecionada == 'All' and produto_selecionado == 'All':
-            df_grafico = df_filtered.sort_values(['mes_ano_dt'])
-            fig = px.line(
-                    df_grafico,
-                    x='mes_ano_dt',
-                    y='Estoque Geral',
-                    title=f'Estoque, Sell-in e Sell-out Geral',
-                    markers=True
-                )
-            # Adicionar linha de Sell-in (verde)
-            fig.add_trace(px.line(
-                df_grafico,
-                x='mes_ano_dt',
-                y='Sell-in Geral',
-                markers=True,
-                color_discrete_sequence=['green']
-            ).data[0].update(name='Sell-in'))
-            
-            # Adicionar linha de Sell-out (vermelho)
-            fig.add_trace(px.line(
-                df_grafico,
-                x='mes_ano_dt',
-                y='Sell-out por Geral',
-                markers=True,
-                color_discrete_sequence=['red']
-            ).data[0].update(name='Sell-out'))
-            
-            # Atualizar o nome da linha de estoque
-            fig.data[0].name = 'Estoque Geral'
-            
-            # Configurar hover personalizado para cada linha
-            fig.data[0].hovertemplate = '<b>Estoque Geral</b><br>' + \
-                                        'Período: %{x}<br>' + \
-                                        'Valor: %{y:,.0f}<br>' + \
-                                        '<extra></extra>'
-            
-            fig.data[1].hovertemplate = '<b>Sell-in Geral</b><br>' + \
-                                        'Período: %{x}<br>' + \
-                                        'Valor: %{y:,.0f}<br>' + \
-                                        '<extra></extra>'
-            
-            fig.data[2].hovertemplate = '<b>Sell-out Geral</b><br>' + \
-                                        'Período: %{x}<br>' + \
-                                        'Valor: %{y:,.0f}<br>' + \
-                                        '<extra></extra>'
-            
-            fig.update_layout(
-                xaxis_title='Período',
-                yaxis_title='Quantidade',
-                height=400,
-                legend=dict(
-                    yanchor="top",
-                    y=0.99,
-                    xanchor="left",
-                    x=0.01
-                ),
-                hovermode='x unified'  # Mostra todos os valores no mesmo ponto
-            )
-            st.plotly_chart(fig, width='stretch')
+            st.info("🔍 Selecione um Grupo ou um Produto para visualizar o gráfico de estoque")
         else:
             # Ordenar dados para o gráfico
             df_grafico = df_filtered.sort_values(['mes_ano_dt'])
