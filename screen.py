@@ -39,23 +39,6 @@ def load_data():
         # Conversão da data
         df['mes_ano_dt'] = pd.to_datetime(df['mes_ano'], format='%m-%Y').dt.date
 
-        # Colunas acumulativas
-        df = df.sort_values(['produto_descricao', 'mes_ano_dt'])
-        df['estoque_acumulado_produto'] = df.groupby('produto_descricao')['diferenca'].cumsum()
-
-        df = df.sort_values(['cliente_nome', 'mes_ano_dt'])
-        df['estoque_acumulado_cliente'] = df.groupby('cliente_nome')['diferenca'].cumsum()
-
-        df = df.sort_values(['cliente_nome', 'mes_ano_dt'])
-        df['sellin_acumulado_cliente'] = df.groupby('cliente_nome')['qtd_vendida_para_farmacia'].cumsum()
-
-        df = df.sort_values(['cliente_nome', 'mes_ano_dt'])
-        df['sellout_acumulado_cliente'] = df.groupby('cliente_nome')['qtd_vendida_para_cliente'].cumsum()
-
-        df = df.sort_values(['produto_descricao', 'cliente_nome', 'mes_ano_dt'])
-        df['estoque_acumulado_produto_cliente'] = df.groupby(['produto_descricao', 'cliente_nome'])[
-            'diferenca'].cumsum()
-
         # Retornar apenas as colunas necessárias já renomeadas
         df_final = df[[
             'cliente_nome',
@@ -65,11 +48,6 @@ def load_data():
             'qtd_vendida_para_farmacia',
             'qtd_vendida_para_cliente',
             'diferenca',
-            'estoque_acumulado_produto',
-            'estoque_acumulado_cliente',
-            'estoque_acumulado_produto_cliente',
-            'sellin_acumulado_cliente',
-            'sellout_acumulado_cliente',
             'mes_ano_dt'  # Manter para filtro de data
         ]].copy()
 
@@ -82,11 +60,6 @@ def load_data():
             'Sell-in',
             'Sell-out',
             'Diferença',
-            'Estoque Total por Produto',
-            'Estoque por Grupo',
-            'Estoque por Produto e Grupo',
-            'Sell-in por Grupo',
-            'Sell-out por Grupo',
             'mes_ano_dt'
         ]
 
@@ -98,6 +71,38 @@ def load_data():
     except Exception as e:
         st.error(f"Erro ao carregar dados: {str(e)}")
         return pd.DataFrame()
+
+
+# ==================== CALCULAR SOMAS ACUMULATIVAS ====================
+def calculate_cumsums(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calcula as somas acumulativas baseadas no dataframe filtrado.
+    As cumsums são calculadas apenas para os dados no dataframe fornecido,
+    resetando no início do período filtrado.
+    """
+    df = df.copy()
+    
+    # Estoque Total por Produto (agrupado por Descrição)
+    df = df.sort_values(['Descrição', 'mes_ano_dt'])
+    df['Estoque Total por Produto'] = df.groupby('Descrição')['Diferença'].cumsum()
+    
+    # Estoque por Grupo (agrupado por Grupo)
+    df = df.sort_values(['Grupo', 'mes_ano_dt'])
+    df['Estoque por Grupo'] = df.groupby('Grupo')['Diferença'].cumsum()
+    
+    # Sell-in por Grupo (agrupado por Grupo)
+    df = df.sort_values(['Grupo', 'mes_ano_dt'])
+    df['Sell-in por Grupo'] = df.groupby('Grupo')['Sell-in'].cumsum()
+    
+    # Sell-out por Grupo (agrupado por Grupo)
+    df = df.sort_values(['Grupo', 'mes_ano_dt'])
+    df['Sell-out por Grupo'] = df.groupby('Grupo')['Sell-out'].cumsum()
+    
+    # Estoque por Produto e Grupo (agrupado por Descrição e Grupo)
+    df = df.sort_values(['Descrição', 'Grupo', 'mes_ano_dt'])
+    df['Estoque por Produto e Grupo'] = df.groupby(['Descrição', 'Grupo'])['Diferença'].cumsum()
+    
+    return df
 
 
 # ==================== APLICAÇÃO PRINCIPAL ====================
@@ -171,6 +176,9 @@ def main():
         st.warning("Nenhum dado encontrado com os filtros aplicados")
         return
 
+    # Calcular somas acumulativas baseadas no período filtrado
+    df_filtered = calculate_cumsums(df_filtered)
+
     # Abas principais
     tab1, tab2 = st.tabs(["📊 Acompanhamento de Estoque", "🔄 Giro de Estoque"])
 
@@ -180,7 +188,63 @@ def main():
 
         # Gráfico de Estoque
         if farmacia_selecionada == 'All' and produto_selecionado == 'All':
-            st.info("🔍 Selecione um Grupo ou um Produto para visualizar o gráfico de estoque")
+            fig = px.line(
+                    df_grafico,
+                    x='mes_ano_dt',
+                    y='Estoque Geral',
+                    title=f'Estoque, Sell-in e Sell-out Geral',
+                    markers=True
+                )
+                # Adicionar linha de Sell-in (verde)
+                fig.add_trace(px.line(
+                    df_grafico,
+                    x='mes_ano_dt',
+                    y='Sell-in Geral',
+                    markers=True,
+                    color_discrete_sequence=['green']
+                ).data[0].update(name='Sell-in'))
+                
+                # Adicionar linha de Sell-out (vermelho)
+                fig.add_trace(px.line(
+                    df_grafico,
+                    x='mes_ano_dt',
+                    y='Sell-out por Geral',
+                    markers=True,
+                    color_discrete_sequence=['red']
+                ).data[0].update(name='Sell-out'))
+                
+                # Atualizar o nome da linha de estoque
+                fig.data[0].name = 'Estoque Geral'
+                
+                # Configurar hover personalizado para cada linha
+                fig.data[0].hovertemplate = '<b>Estoque Geral</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
+                fig.data[1].hovertemplate = '<b>Sell-in Geral</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
+                fig.data[2].hovertemplate = '<b>Sell-out Geral</b><br>' + \
+                                          'Período: %{x}<br>' + \
+                                          'Valor: %{y:,.0f}<br>' + \
+                                          '<extra></extra>'
+                
+                fig.update_layout(
+                    xaxis_title='Período',
+                    yaxis_title='Quantidade',
+                    height=400,
+                    legend=dict(
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="left",
+                        x=0.01
+                    ),
+                    hovermode='x unified'  # Mostra todos os valores no mesmo ponto
+                )
+                st.plotly_chart(fig, width='stretch')
         else:
             # Ordenar dados para o gráfico
             df_grafico = df_filtered.sort_values(['mes_ano_dt'])
